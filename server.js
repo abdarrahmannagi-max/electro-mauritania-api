@@ -3,15 +3,15 @@ const cors = require("cors");
 const { Resend } = require("resend");
 
 const app = express();
-app.use(cors());
 app.use(express.json());
-
-// تخزين OTP
-const otpStore = {};
+app.use(cors());
 
 // Resend API
-const resend = new Resend("re_7yWfbY9R_ch6ZXrq2ZXEVBNsqFKpFS6sE");
+const resend = new Resend("PUT_YOUR_API_KEY_HERE");
 
+const otpStore = {};
+
+// إرسال OTP
 app.post("/api/send-otp", async (req, res) => {
     try {
         const { email } = req.body;
@@ -20,59 +20,43 @@ app.post("/api/send-otp", async (req, res) => {
             return res.status(400).json({ error: "Email required" });
         }
 
-        // توليد OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
         otpStore[email] = otp;
 
         console.log("OTP:", otp);
 
-        // إرسال البريد عبر Resend
         const result = await resend.emails.send({
-            from: "Electro <onboarding@resend.dev>",
+            from: "onboarding@resend.dev",
             to: email,
             subject: "رمز التحقق OTP",
-            html: `
-                <div style="font-family:Arial;text-align:center">
-                    <h2>رمز التحقق الخاص بك</h2>
-                    <h1 style="color:#2563eb">${otp}</h1>
-                    <p>لا تشارك هذا الرمز مع أي شخص</p>
-                </div>
-            `
+            html: `<h1>رمزك هو: ${otp}</h1>`
         });
 
-        console.log("EMAIL RESULT:", result);
+        console.log("EMAIL SENT:", result);
 
-        return res.json({
-            success: true,
-            message: "OTP sent",
-            otp // للتجربة فقط (احذفه في الإنتاج)
-        });
+        res.json({ success: true });
 
     } catch (err) {
-        console.error("EMAIL ERROR:", err);
-
-        return res.status(500).json({
-            error: "Email failed",
-            details: err.message
-        });
+        console.log("EMAIL ERROR:", err);
+        res.status(500).json({ error: "Email failed" });
     }
 });
 
+// التحقق
 app.post("/api/verify-otp", (req, res) => {
     const { email, otp } = req.body;
 
     if (otpStore[email] === otp) {
+        delete otpStore[email];
         return res.json({ success: true });
     }
 
-    return res.status(400).json({
-        error: "Invalid OTP"
-    });
+    return res.status(400).json({ error: "Invalid OTP" });
 });
 
-// مهم جداً لـ Render
-const PORT = process.env.PORT || 10000;
-
+// تشغيل السيرفر (مهم لـ Render)
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log("Server running on port", PORT);
 });
