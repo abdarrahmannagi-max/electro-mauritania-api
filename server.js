@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const { Resend } = require("resend");
 
 const app = express();
 
@@ -10,6 +11,17 @@ const app = express();
 // =========================
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+
+// تحقق من المفاتيح
+if (!JWT_SECRET) {
+    console.error("❌ JWT_SECRET missing");
+}
+if (!RESEND_API_KEY) {
+    console.warn("⚠️ RESEND_API_KEY missing (emails will not send)");
+}
+
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 // =========================
 // MIDDLEWARE
@@ -17,30 +29,28 @@ const JWT_SECRET = process.env.JWT_SECRET;
 app.use(express.json());
 
 app.use(cors({
-    origin: "*", // لاحقاً غيّرها لدومين موقعك
+    origin: [
+        "https://electro-mauritania.onrender.com",
+        "http://localhost:5173"
+    ],
     credentials: true
 }));
 
 // =========================
-// HEALTH CHECK
+// MEMORY DB (مؤقت - لاحقاً MongoDB)
+// =========================
+let users = [];
+let otpStore = {};
+
+// =========================
+// HEALTH
 // =========================
 app.get("/", (req, res) => {
     res.send("🚀 Server is running");
 });
 
-app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
-});
-
 // =========================
-// MEMORY DATABASE (مؤقت)
-// الأفضل MongoDB لاحقاً
-// =========================
-const users = [];
-const otpStore = {};
-
-// =========================
-// GENERATE TOKEN
+// JWT
 // =========================
 function generateToken(user) {
     return jwt.sign(
@@ -66,7 +76,7 @@ function auth(req, res, next) {
 
         req.user = user;
         next();
-    } catch (e) {
+    } catch (err) {
         return res.status(401).json({ error: "Invalid token" });
     }
 }
@@ -95,10 +105,7 @@ app.post("/api/register", async (req, res) => {
 
     const token = generateToken(user);
 
-    res.json({
-        user,
-        token
-    });
+    res.json({ user, token });
 });
 
 // =========================
@@ -115,23 +122,20 @@ app.post("/api/login", async (req, res) => {
 
     const token = generateToken(user);
 
-    res.json({
-        user,
-        token
-    });
+    res.json({ user, token });
 });
 
 // =========================
-// GET ME
+// ME
 // =========================
 app.get("/api/me", auth, (req, res) => {
     res.json({ user: req.user });
 });
 
 // =========================
-// SEND OTP
+// SEND OTP (FIXED EMAIL)
 // =========================
-app.post("/api/send-otp", (req, res) => {
+app.post("/api/send-otp", async (req, res) => {
     const { email } = req.body;
 
     if (!email) return res.status(400).json({ error: "Email required" });
@@ -140,15 +144,28 @@ app.post("/api/send-otp", (req, res) => {
 
     otpStore[email] = {
         otp,
-        expires: Date.now() + 10 * 60 * 1000 // 10 min
+        expires: Date.now() + 10 * 60 * 1000
     };
 
     console.log("OTP:", email, otp);
 
+    // إرسال فعلي عبر Resend
+    if (resend) {
+        try {
+            await resend.emails.send({
+                from: "Electro <onboarding@resend.dev>",
+                to: email,
+                subject: "Your Verification Code",
+                html: `<h1>Your OTP: ${otp}</h1>`
+            });
+        } catch (err) {
+            console.error("EMAIL ERROR:", err);
+        }
+    }
+
     res.json({
         success: true,
-        devMode: true,
-        otp
+        devOTP: otp
     });
 });
 
@@ -160,7 +177,7 @@ app.post("/api/verify-otp", (req, res) => {
 
     const record = otpStore[email];
 
-    if (!record) return res.status(400).json({ error: "No OTP" });
+    if (!record) return res.status(400).json({ error: "No OTP found" });
 
     if (Date.now() > record.expires) {
         delete otpStore[email];
@@ -201,5 +218,5 @@ app.post("/api/logout", (req, res) => {
 // START SERVER
 // =========================
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log("🚀 Server running on port", PORT);
 });
