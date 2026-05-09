@@ -7,24 +7,24 @@ app.use(cors());
 app.use(express.json());
 
 // =========================
-// PORT (مهم جدًا لـ Render)
+// PORT (Render mandatory)
 // =========================
 const PORT = process.env.PORT || 10000;
 
 // =========================
-// Health check (ضروري لـ Render)
+// Health check (IMPORTANT)
 // =========================
 app.get("/", (req, res) => {
-    res.send("🚀 Server is alive");
+    res.send("🚀 Server is running");
 });
 
 // =========================
-// OTP storage
+// OTP memory store
 // =========================
 const otpStore = {};
 
 // =========================
-// Load Resend safely (NO CRASH)
+// SAFE RESEND LOADING
 // =========================
 let resend = null;
 
@@ -33,40 +33,39 @@ try {
 
     if (process.env.RESEND_API_KEY) {
         resend = new Resend(process.env.RESEND_API_KEY);
-        console.log("✅ Resend initialized");
+        console.log("✅ Resend loaded");
     } else {
-        console.log("❌ Missing RESEND_API_KEY");
+        console.log("⚠️ Missing RESEND_API_KEY");
     }
-} catch (err) {
-    console.log("❌ Resend failed to load:", err.message);
+} catch (e) {
+    console.log("⚠️ Resend disabled:", e.message);
 }
 
 // =========================
 // SEND OTP
 // =========================
 app.post("/api/send-otp", async (req, res) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return res.status(400).json({ error: "Email required" });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    otpStore[email] = otp;
+
+    console.log("OTP:", otp);
+
+    // إذا resend لا يعمل → لا يوقف السيرفر
+    if (!resend) {
+        return res.json({
+            success: true,
+            devMode: true,
+            otp
+        });
+    }
+
     try {
-        const { email } = req.body;
-
-        if (!email) {
-            return res.status(400).json({ error: "Email required" });
-        }
-
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        otpStore[email] = otp;
-
-        console.log("OTP:", otp);
-
-        // إذا Resend غير شغال → لا ينهار السيرفر
-        if (!resend) {
-            return res.json({
-                success: true,
-                devMode: true,
-                otp
-            });
-        }
-
         await resend.emails.send({
             from: "onboarding@resend.dev",
             to: email,
@@ -77,8 +76,8 @@ app.post("/api/send-otp", async (req, res) => {
         return res.json({ success: true });
 
     } catch (err) {
-        console.log("SEND OTP ERROR:", err);
-        return res.status(500).json({ error: "Failed to send OTP" });
+        console.log("EMAIL ERROR:", err);
+        return res.status(500).json({ error: "Email failed" });
     }
 });
 
@@ -97,12 +96,12 @@ app.post("/api/verify-otp", (req, res) => {
 });
 
 // =========================
-// START SERVER (NO CRASH)
+// START SERVER (CRASH SAFE)
 // =========================
 try {
     app.listen(PORT, "0.0.0.0", () => {
         console.log(`🚀 Server running on port ${PORT}`);
     });
 } catch (err) {
-    console.log("❌ Server failed to start:", err.message);
+    console.log("FATAL ERROR:", err.message);
 }
