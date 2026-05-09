@@ -1,21 +1,26 @@
-const { Resend } = require("resend");
-
-const resend = new Resend("re_7yWfbY9R_ch6ZXrq2ZXEVBNsqFKpFS6sE");
-
-async function sendTestEmail() {
+app.post("/api/send-otp", async (req, res) => {
     try {
+        const { email } = req.body;
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
         const result = await resend.emails.send({
             from: "Electro <onboarding@resend.dev>",
-            to: "abdarrahman205@gmail.com",
-            subject: "Hello World",
-            html: "<p>Congrats on sending your <strong>first email</strong>!</p>"
+            to: email,
+            subject: "OTP Code",
+            html: `<h1>${otp}</h1>`
         });
 
-        console.log("EMAIL SENT SUCCESSFULLY:", result);
+        console.log("SUCCESS:", result);
+
+        return res.json({ success: true, otp });
 
     } catch (err) {
-        console.error("EMAIL ERROR:", err);
-    }
-}
+        console.error("FULL ERROR:", err); // 🔥 مهم جدًا
 
-sendTestEmail();
+        return res.status(500).json({
+            success: false,
+            error: err.message // 🔥 هذا يكشف المشكلة الحقيقية
+        });
+    }
+});
