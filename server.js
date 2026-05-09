@@ -4,52 +4,52 @@ const nodemailer = require("nodemailer");
 
 const app = express();
 
-app.use(cors({
-    origin: "*",
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"]
-}));
-
 app.use(express.json());
 
+app.use(cors({
+    origin: "*"
+}));
+
+// تخزين الأكواد مؤقتاً
 const otpStore = {};
 
-// Gmail SMTP
+// إعداد Gmail SMTP الصحيح
 const transporter = nodemailer.createTransport({
-    service: "gmail",
+
+    host: "smtp.gmail.com",
+
+    port: 587,
+
+    secure: false,
+
     auth: {
+
         user: "abdarrahmannagi@gmail.com",
 
-        // ضع هنا App Password الحقيقي من Google
+        // ضع App Password هنا
         pass: "pmdpbvjgapdjaqhb"
+
+    },
+
+    tls: {
+        rejectUnauthorized: false
     }
 });
 
-// فحص SMTP
-transporter.verify((error, success) => {
-
-    if (error) {
-
-        console.log("SMTP ERROR:", error);
-
-    } else {
-
-        console.log("SMTP READY");
-    }
-});
-
-// الصفحة الرئيسية
+// اختبار السيرفر
 app.get("/", (req, res) => {
 
     res.send("SERVER IS WORKING");
+
 });
 
-// فحص السيرفر
+// فحص API
 app.get("/api/health", (req, res) => {
 
     res.json({
         status: "online"
     });
+
 });
 
 // إرسال OTP
@@ -66,12 +66,14 @@ app.post("/api/send-otp", async (req, res) => {
             });
         }
 
-        // إنشاء OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        // إنشاء الكود
+        const otp = Math.floor(
+            100000 + Math.random() * 900000
+        ).toString();
 
         otpStore[email] = otp;
 
-        console.log("Sending OTP:", otp, "to", email);
+        console.log("OTP:", otp);
 
         // إرسال الإيميل
         await transporter.sendMail({
@@ -83,38 +85,44 @@ app.post("/api/send-otp", async (req, res) => {
             subject: "رمز التحقق - Electro Mauritania",
 
             html: `
-                <div style="font-family:Arial;padding:30px;background:#0f172a;color:white">
+                <div style="
+                    font-family:Arial;
+                    padding:40px;
+                    background:#0f172a;
+                    color:white;
+                    text-align:center;
+                    border-radius:20px;
+                ">
 
-                    <h1 style="color:#3b82f6">
+                    <h1 style="color:#3b82f6;">
                         Electro Mauritania
                     </h1>
 
-                    <p>
-                        رمز التحقق الخاص بك هو:
+                    <p style="font-size:18px;">
+                        رمز التحقق الخاص بك:
                     </p>
 
-                    <h2 style="
-                        background:#1e293b;
-                        padding:20px;
-                        border-radius:10px;
-                        text-align:center;
-                        letter-spacing:8px;
-                        color:#38bdf8;
+                    <div style="
+                        font-size:45px;
+                        font-weight:bold;
+                        letter-spacing:10px;
+                        color:#22c55e;
+                        margin:30px 0;
                     ">
                         ${otp}
-                    </h2>
+                    </div>
 
                     <p>
-                        صالح لمدة 5 دقائق فقط.
+                        صالح لمدة 5 دقائق فقط
                     </p>
 
                 </div>
             `
         });
 
-        console.log("EMAIL SENT SUCCESSFULLY");
+        console.log("EMAIL SENT");
 
-        res.json({
+        return res.json({
             success: true
         });
 
@@ -122,7 +130,8 @@ app.post("/api/send-otp", async (req, res) => {
 
         console.log("EMAIL ERROR:", err);
 
-        res.status(500).json({
+        return res.status(500).json({
+
             error: err.message
         });
     }
@@ -140,7 +149,7 @@ app.post("/api/verify-otp", (req, res) => {
         });
     }
 
-    if (otpStore[email] === otp) {
+    if (otpStore[email] == otp) {
 
         delete otpStore[email];
 
@@ -149,7 +158,7 @@ app.post("/api/verify-otp", (req, res) => {
         });
     }
 
-    res.status(400).json({
+    return res.status(400).json({
         error: "Invalid OTP"
     });
 });
@@ -159,5 +168,6 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
 
-    console.log("SERVER RUNNING ON PORT", PORT);
+    console.log("Server running on port " + PORT);
+
 });
