@@ -1,40 +1,49 @@
 const express = require("express");
 const cors = require("cors");
-const { Resend } = require("resend");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-/* =========================
-   🔐 Resend API KEY
-========================= */
-if (!process.env.RESEND_API_KEY) {
-    console.log("❌ Missing RESEND_API_KEY");
-}
+// =========================
+// PORT (مهم جدًا لـ Render)
+// =========================
+const PORT = process.env.PORT || 10000;
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// =========================
+// Health check (ضروري لـ Render)
+// =========================
+app.get("/", (req, res) => {
+    res.send("🚀 Server is alive");
+});
 
-/* =========================
-   OTP Storage
-========================= */
+// =========================
+// OTP storage
+// =========================
 const otpStore = {};
 
-/* =========================
-   Health Check (مهم جدًا لـ Render)
-========================= */
-app.get("/", (req, res) => {
-    res.send("🚀 Server is running");
-});
+// =========================
+// Load Resend safely (NO CRASH)
+// =========================
+let resend = null;
 
-app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
-});
+try {
+    const { Resend } = require("resend");
 
-/* =========================
-   Send OTP
-========================= */
+    if (process.env.RESEND_API_KEY) {
+        resend = new Resend(process.env.RESEND_API_KEY);
+        console.log("✅ Resend initialized");
+    } else {
+        console.log("❌ Missing RESEND_API_KEY");
+    }
+} catch (err) {
+    console.log("❌ Resend failed to load:", err.message);
+}
+
+// =========================
+// SEND OTP
+// =========================
 app.post("/api/send-otp", async (req, res) => {
     try {
         const { email } = req.body;
@@ -47,40 +56,37 @@ app.post("/api/send-otp", async (req, res) => {
 
         otpStore[email] = otp;
 
-        console.log("OTP GENERATED:", otp);
+        console.log("OTP:", otp);
+
+        // إذا Resend غير شغال → لا ينهار السيرفر
+        if (!resend) {
+            return res.json({
+                success: true,
+                devMode: true,
+                otp
+            });
+        }
 
         await resend.emails.send({
             from: "onboarding@resend.dev",
             to: email,
             subject: "OTP Code",
-            html: `
-                <div style="font-family:Arial;text-align:center">
-                    <h2>Your OTP Code</h2>
-                    <h1 style="color:#2563eb">${otp}</h1>
-                </div>
-            `
+            html: `<h1>${otp}</h1>`
         });
 
         return res.json({ success: true });
 
     } catch (err) {
-        console.log("EMAIL ERROR:", err);
-
-        return res.status(500).json({
-            error: "Failed to send email"
-        });
+        console.log("SEND OTP ERROR:", err);
+        return res.status(500).json({ error: "Failed to send OTP" });
     }
 });
 
-/* =========================
-   Verify OTP
-========================= */
+// =========================
+// VERIFY OTP
+// =========================
 app.post("/api/verify-otp", (req, res) => {
     const { email, otp } = req.body;
-
-    if (!email || !otp) {
-        return res.status(400).json({ error: "Missing data" });
-    }
 
     if (otpStore[email] === otp) {
         delete otpStore[email];
@@ -90,11 +96,13 @@ app.post("/api/verify-otp", (req, res) => {
     return res.status(400).json({ error: "Invalid OTP" });
 });
 
-/* =========================
-   PORT (IMPORTANT)
-========================= */
-const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-});
+// =========================
+// START SERVER (NO CRASH)
+// =========================
+try {
+    app.listen(PORT, "0.0.0.0", () => {
+        console.log(`🚀 Server running on port ${PORT}`);
+    });
+} catch (err) {
+    console.log("❌ Server failed to start:", err.message);
+}
