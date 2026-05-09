@@ -3,29 +3,37 @@ const cors = require("cors");
 const { Resend } = require("resend");
 
 const app = express();
-app.use(express.json());
+
 app.use(cors());
+app.use(express.json());
 
 /* =========================
-   🔐 ضع مفتاح Resend هنا
-   (من Render Environment Variables)
+   🔐 Resend API KEY
 ========================= */
+if (!process.env.RESEND_API_KEY) {
+    console.log("❌ Missing RESEND_API_KEY");
+}
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 /* =========================
-   تخزين OTP
+   OTP Storage
 ========================= */
 const otpStore = {};
 
 /* =========================
-   Health Check
+   Health Check (مهم جدًا لـ Render)
 ========================= */
+app.get("/", (req, res) => {
+    res.send("🚀 Server is running");
+});
+
 app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
 });
 
 /* =========================
-   إرسال OTP
+   Send OTP
 ========================= */
 app.post("/api/send-otp", async (req, res) => {
     try {
@@ -44,29 +52,35 @@ app.post("/api/send-otp", async (req, res) => {
         await resend.emails.send({
             from: "onboarding@resend.dev",
             to: email,
-            subject: "رمز التحقق OTP",
+            subject: "OTP Code",
             html: `
                 <div style="font-family:Arial;text-align:center">
-                    <h2>رمز التحقق الخاص بك</h2>
+                    <h2>Your OTP Code</h2>
                     <h1 style="color:#2563eb">${otp}</h1>
-                    <p>لا تشارك هذا الرمز مع أي أحد</p>
                 </div>
             `
         });
 
-        res.json({ success: true });
+        return res.json({ success: true });
 
     } catch (err) {
         console.log("EMAIL ERROR:", err);
-        res.status(500).json({ error: "Email failed" });
+
+        return res.status(500).json({
+            error: "Failed to send email"
+        });
     }
 });
 
 /* =========================
-   التحقق من OTP
+   Verify OTP
 ========================= */
 app.post("/api/verify-otp", (req, res) => {
     const { email, otp } = req.body;
+
+    if (!email || !otp) {
+        return res.status(400).json({ error: "Missing data" });
+    }
 
     if (otpStore[email] === otp) {
         delete otpStore[email];
@@ -77,10 +91,10 @@ app.post("/api/verify-otp", (req, res) => {
 });
 
 /* =========================
-   تشغيل السيرفر
+   PORT (IMPORTANT)
 ========================= */
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT, () => {
-    console.log("🚀 Server running on port", PORT);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Server running on port ${PORT}`);
 });
