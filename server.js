@@ -3,73 +3,48 @@ const cors = require("cors");
 const nodemailer = require("nodemailer");
 
 const app = express();
-
 app.use(express.json());
-
 app.use(cors());
 
 const otpStore = {};
 
+// 🔥 إعداد Gmail الصحيح
 const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-
+    service: "gmail",
     auth: {
-        user: "abdarrahmannagi@gmail.com",
-
-        // ضع App Password هنا
-        pass: "pmdpbvjgapdjaqhb"
+        user: "abdarrahman250@gmail.com",
+        pass: "ozcbbkoipomrfkja"
     }
 });
 
+// اختبار السيرفر
 app.get("/", (req, res) => {
     res.send("SERVER IS WORKING");
 });
 
-app.get("/api/health", (req, res) => {
-    res.json({
-        status: "online"
-    });
-});
-
+// إرسال OTP
 app.post("/api/send-otp", async (req, res) => {
-
     try {
-
         const { email } = req.body;
 
         if (!email) {
-            return res.status(400).json({
-                error: "Email required"
-            });
+            return res.status(400).json({ error: "Email required" });
         }
 
-        const otp = Math.floor(
-            100000 + Math.random() * 900000
-        ).toString();
-
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
         otpStore[email] = otp;
 
         console.log("OTP:", otp);
 
         await transporter.sendMail({
-
-            from: '"Electro Mauritania" <abdarrahmannagi@gmail.com>',
-
+            from: `"Electro Mauritania" <${"abdarrahman250@gmail.com"}>`,
             to: email,
-
             subject: "رمز التحقق",
-
             html: `
-                <div style="font-family:Arial;padding:30px;text-align:center">
-                    <h1>Electro Mauritania</h1>
-
-                    <p>رمز التحقق الخاص بك:</p>
-
-                    <h2 style="font-size:40px;color:#2563eb">
-                        ${otp}
-                    </h2>
+                <div style="font-family:Arial;text-align:center">
+                    <h2>رمز التحقق الخاص بك</h2>
+                    <h1 style="color:#2563eb;font-size:40px">${otp}</h1>
+                    <p>لا تشارك هذا الرمز مع أي شخص</p>
                 </div>
             `
         });
@@ -77,39 +52,35 @@ app.post("/api/send-otp", async (req, res) => {
         console.log("EMAIL SENT");
 
         return res.json({
-            success: true
+            success: true,
+            message: "OTP sent"
         });
 
     } catch (err) {
-
-        console.log(err);
+        console.error("EMAIL ERROR:", err);
 
         return res.status(500).json({
-            error: err.message
+            success: false,
+            error: "Email failed"
         });
     }
 });
 
+// التحقق
 app.post("/api/verify-otp", (req, res) => {
-
     const { email, otp } = req.body;
 
-    if (otpStore[email] == otp) {
-
+    if (otpStore[email] === otp) {
         delete otpStore[email];
-
-        return res.json({
-            success: true
-        });
+        return res.json({ success: true });
     }
 
-    return res.status(400).json({
-        error: "Invalid OTP"
-    });
+    return res.status(400).json({ error: "Invalid OTP" });
 });
 
-const PORT = process.env.PORT || 3000;
+// تشغيل السيرفر (مهم لـ Render)
+const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-    console.log("Server running");
+    console.log("SERVER RUNNING ON PORT", PORT);
 });
